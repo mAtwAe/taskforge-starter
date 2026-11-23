@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: taskforge
+      POSTGRES_PASSWORD: taskforge
+      POSTGRES_DB: taskforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskforge -d taskforge"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  init:
+    build: .
+    environment: &db_env
+      DATABASE_URL: postgresql+psycopg://taskforge:taskforge@db:5432/taskforge
+    command: python -m app.init_db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    environment: *db_env
+    ports:
+      - "8000:8000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  worker:
+    build: .
+    environment: *db_env
+    command: python -m app.worker
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
